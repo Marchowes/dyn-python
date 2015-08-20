@@ -122,6 +122,28 @@ class _DSFRecord(object):
             else:
                 setattr(self, '_' + key, val)
 
+    def post(self, dsf_id, record_set_id):
+        uri = '/DSFRecord/{}/{}/'.format(dsf_id, record_set_id)
+        api_args = {}
+        api_args['master_line']=self._address
+        api_args['eligible'] = 'True'
+        api_args['endpoint_up_count'] = 1
+        api_args['automation'] = 'auto'
+        api_args['publish'] = 'Y'
+
+
+        response = DynectSession.get_session().execute(uri, 'POST',
+                                                       api_args)
+        self._build(response['data'])
+
+
+
+
+
+
+
+        #self._post(dsf_id, record_set_id)
+
     @property
     def dsf_id(self):
         """The unique system id for the DSF service associated with this
@@ -241,9 +263,14 @@ class _DSFRecord(object):
             json_blob['rdata'] = {outer_key: real_data}
         return json_blob
 
-    def delete(self):
+
+    def delete(self, dsf_id=None):
         """Delete this :class:`DSFRecord`"""
+        if not dsf_id:
+            dsf_id = self._dsf_id
+
         api_args = {'publish': 'Y'}
+        self.uri = '/DSFRecord/{}/{}/'.format(dsf_id, self._dsf_record_id)
         DynectSession.get_session().execute(self.uri, 'DELETE', api_args)
 
 
@@ -272,6 +299,23 @@ class DSFARecord(_DSFRecord, ARecord):
                          create=False)
         _DSFRecord.__init__(self, label, weight, automation, endpoints,
                             endpoint_up_count, eligible, **kwargs)
+
+    def address(self, dsf_id, address):
+        self._address = address
+        uri = '/DSFRecord/{}/{}/'.format(dsf_id, self._dsf_record_id)
+        api_args = {}
+        api_args['master_line']=self._address
+        api_args['eligible'] = 'True'
+        api_args['endpoint_up_count'] = 1
+        api_args['automation'] = 'auto'
+        api_args['publish'] = 'Y'
+
+
+        response = DynectSession.get_session().execute(uri, 'PUT',
+                                                       api_args)
+        self._build(response['data'])
+
+
 
 
 class DSFAAAARecord(_DSFRecord, AAAARecord):
@@ -1033,6 +1077,22 @@ class DSFRecordSet(object):
         self.uri = '/DSFRecordSet/{}/{}/'.format(self._service_id,
                                                  self._dsf_record_set_id)
 
+
+    def _update(self, api_args):
+        """Get an existing :class:`DSFRecordSet` from the DynECT System
+
+        :param dsf_id: The unique system id of the DSF service this
+            :class:`DSFRecordSet` is attached to
+        :param dsf_record_set_id: The unique system id of the DSF Record Set
+            this :class:`DSFRecordSet` is attached to
+        """
+        self.uri = '/DSFRecordSet/{}/{}/'.format(self._service_id,
+                                                 self._dsf_record_set_id)
+        response = DynectSession.get_session().execute(self.uri, 'PUT',
+                                                       api_args)
+        self._build(response['data'])
+
+
     def _get(self, dsf_id, dsf_record_set_id):
         """Get an existing :class:`DSFRecordSet` from the DynECT System
 
@@ -1063,8 +1123,62 @@ class DSFRecordSet(object):
         """
         return self._records
     @records.setter
-    def records(self, value):
+    def records(self, records):
         pass
+        newRecs = []
+        for record in records:
+            constructors = {'a': DSFARecord, 'aaaa': DSFAAAARecord,
+                            'cert': DSFCERTRecord, 'cname': DSFCNAMERecord,
+                            'dhcid': DSFDHCIDRecord,
+                            'dname': DSFDNAMERecord,
+                            'dnskey': DSFDNSKEYRecord, 'ds': DSFDSRecord,
+                            'key': DSFKEYRecord, 'kx': DSFKXRecord,
+                            'loc': DSFLOCRecord,
+                            'ipseckey': DSFIPSECKEYRecord,
+                            'mx': DSFMXRecord, 'naptr': DSFNAPTRRecord,
+                            'ptr': DSFPTRRecord, 'px': DSFPXRecord,
+                            'nsap': DSFNSAPRecord, 'rp': DSFRPRecord,
+                            'ns': DSFNSRecord, 'spf': DSFSPFRecord,
+                            'srv': DSFSRVRecord, 'txt': DSFTXTRecord}
+            rec_type = self.rdata_class.lower()
+            constructor = constructors[rec_type]
+            rdata_key = 'rdata_{}'.format(rec_type)
+            kws = ('ttl', 'label', 'weight', 'automation', 'endpoints',
+                   'endpoint_up_count', 'eligible', 'dsf_record_id',
+                   'dsf_record_set_id', 'status', 'torpidity')
+            for data in record['rdata']:
+                record_data = data['data'][rdata_key]
+                for kw in kws:
+                    record_data[kw] = record[kw]
+                if constructor is DSFSRVRecord:
+                    record_data['rr_weight'] = record_data.pop('weight')
+                newRecs.append(constructor(**record_data))
+
+        api_args = {'records': newRecs}
+        self._update(api_args)
+
+
+    def add_record(self, record):
+        """
+        Temporary, at least for now. Add a record to this recordset
+        :param record:
+        :return:
+        """
+        api_args = {}
+        #api_args['master_line']=record.address
+        api_args['eligible'] = 'True'
+        #api_args['endpoint_up_count'] = 1
+        api_args['automation'] = 'auto'
+        api_args['publish'] = 'Y'
+
+        api_args['label'] = record.label
+        api_args['rdata']= {'address': record.address}
+        api_args['weight'] = 1
+
+        self._update(api_args)
+
+
+
 
     @property
     def status(self):
@@ -2143,6 +2257,9 @@ class TrafficDirector(object):
                                                        api_args)
         self._build(response['data'])
 
+    def refresh(self):
+        self._get(self._service_id)
+
     def revert_changes(self):
         """Clears the changeset for this service and reverts all non-published
         changes to their original state
@@ -2250,6 +2367,9 @@ class TrafficDirector(object):
         elif isinstance(value, APIList):
             self._rulesets = value
         self._rulesets.uri = self.uri
+        api_args={}
+        api_args['rulesets'] = [rule._json for rule in self._rulesets]
+        self._update(api_args)
 
     @property
     def nodeObjects(self):
@@ -2343,6 +2463,7 @@ class TrafficDirector(object):
         self._ttl = value
         api_args = {'ttl': self._ttl}
         self._update(api_args)
+
 
     def delete(self):
         """Delete this :class:`TrafficDirector` from the DynECT System"""
