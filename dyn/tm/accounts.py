@@ -1203,6 +1203,54 @@ class UserZone(object):
         """bytes override"""
         return bytes(self.__str__())
 
+class UserZonePermission(object):
+    """Dynect User Zone Permission Class."""
+    def __init__(self, user_name, *args, **kwargs):
+        self._user_name = user_name
+        self._permission_report_uri = '/UserPermissionReport/'
+        self._permission_report = None
+
+        self._get_permission()
+
+
+    def _get_permission(self):
+        api_args = {'user_name': self._user_name}
+        response = DynectSession.get_session().execute(
+            self._permission_report_uri, 'POST', api_args)
+        self._permission_report = response['data']['allowed']
+
+    def get_zone_permission(self, zone):
+        permission = list()
+        permission += [perm['name'] for perm in self._permission_report
+                      if zone in [x['zone_name'] for x in perm['zone']]]
+        return permission
+
+    def get_permission_zone(self, permission):
+        zones = list()
+
+        _permission = [perm for perm in self._permission_report if perm['name'] == permission]
+        if _permission:
+            zones = [zone['zone_name'] for zone in _permission[0]['zone']]
+        return zones
+
+    def add_permissions_to_zone(self, permissions):
+        for permission in permissions:
+            pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class Notifier(object):
     """DynECT System Notifier"""
