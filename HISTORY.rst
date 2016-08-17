@@ -1,6 +1,15 @@
 Release History
 ---------------
 
+1.7.2 (2016-08-17)
+++++++++++++++++++
+*Update add_node and remove_node functions in Traffic Director to respect implicitPublish setting.
+
+1.7.1 (2016-08-11)
+++++++++++++++++++
+*task_id is now returned for a number of calls that spawn system tasks
+*Bug fixes in RTTM. If you are using the RTTM with the SDK against our system, after Release-5.2.17 you will have to upgrade to this version.
+
 1.7.0 (2016-06-22)
 ++++++++++++++++++
 *Bug fix for implicit publishes in the DSF service with Publish Notes.
